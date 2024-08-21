@@ -1,84 +1,73 @@
-#include "alien.h"
-#include "display.h"
 #include "eadkpp.h"
-#include "palette.h"
-#include "spaceship.h"
 
-extern const char eadk_app_name[] __attribute__((section(".rodata.eadk_app_name"))) = "Voord";
+using namespace EADK;
+
+extern const char eadk_app_name[] __attribute__((section(".rodata.eadk_app_name"))) = "Game of life";
 extern const uint32_t eadk_api_level __attribute__((section(".rodata.eadk_api_level"))) = 0;
 
-void checkForSpaceshipAlienCollisions(Alien aliens[], int numberOfAliens, Spaceship * spaceship) {
-  for (int i = 0; i < numberOfAliens; i++) {
-    if (aliens[i].tryToHit(spaceship)) {
-      EADK::Display::pushRectUniform(EADK::Screen::Rect, Red);
-      while (1) {}
+const Color Black(0x414041);
+const Color White(0xeeeeee);
+
+bool grid[Screen::Height][Screen::Width];
+
+uint8_t countNeighbors(uint16_t x, uint16_t y) {
+  uint8_t neighbors = 0;
+  for (int8_t i = -1; i < 2; i++)
+  {
+    for (int8_t j = -1; j < 2; j++)
+    {
+      if (i == 0 && j == 0) continue;
+      if (grid[(y + i) % Screen::Height][(x + j) % Screen::Width]){
+        neighbors++;
+      }
     }
   }
+  return neighbors;
 }
 
-int main(int argc, char * argv[]) {
-  EADK::Display::pushRectUniform(EADK::Screen::Rect, Black);
+int main() {
 
-  constexpr int k_maxNumberOfAliens = 10;
-  Alien aliens[k_maxNumberOfAliens];
-
-  Spaceship spaceship;
-
-  int rocketTimer = 0;
-  int alienStepTimer = 0;
-  int alienMaterializationTimer = 0;
-  while (1) {
-    EADK::Keyboard::State keyboardState = EADK::Keyboard::scan();
-    if (keyboardState.keyDown(EADK::Keyboard::Key::OK)) {
-      spaceship.createRockets();
+  for (uint16_t i = 0; i < Screen::Height; i++)
+  {
+    for (uint16_t j = 0; j < Screen::Width; j++)
+    {
+      grid[i][j] = EADK::random() & 1;
     }
-    if (keyboardState.keyDown(EADK::Keyboard::Key::Up)) {
-      spaceship.move(0, -Spaceship::k_step);
-    }
-    if (keyboardState.keyDown(EADK::Keyboard::Key::Down)) {
-      spaceship.move(0, Spaceship::k_step);
-    }
-    if (keyboardState.keyDown(EADK::Keyboard::Key::Left)) {
-      spaceship.move(-Spaceship::k_step, 0);
-    }
-    if (keyboardState.keyDown(EADK::Keyboard::Key::Right)) {
-      spaceship.move(Spaceship::k_step, 0);
-    }
-
-    checkForSpaceshipAlienCollisions(aliens, k_maxNumberOfAliens, &spaceship);
-
-    // Rockets move forward and potentially collide
-    if (rocketTimer == Rocket::k_period) {
-      rocketTimer = 0;
-      spaceship.rocketsAction(aliens, k_maxNumberOfAliens);
-    }
-
-    // Aliens move forward and potentially collide with rockets or spaceship
-    if (alienStepTimer == Alien::k_stepPeriod) {
-      alienStepTimer = 0;
-      for (int i = 0; i < k_maxNumberOfAliens; i++) {
-        aliens[i].step();
-      }
-      checkForSpaceshipAlienCollisions(aliens, k_maxNumberOfAliens, &spaceship);
-      spaceship.checkForRocketsAliensCollisions(aliens, k_maxNumberOfAliens);
-    }
-
-    EADK::Timing::msleep(20);
-
-    // New alien
-    if (alienMaterializationTimer == Alien::k_materializationPeriod) {
-      alienMaterializationTimer = 0;
-      for (int i = 0; i < k_maxNumberOfAliens; i++) {
-        if (aliens[i].isGhost()) {
-          aliens[i] = Alien(Display::CommonHorizontalMargin + (float)EADK::random()/(float)0xFFFFFFFF * (EADK::Screen::Width - 2*Display::CommonHorizontalMargin));
-          break;
-        }
-      }
-    }
-
-    // Increment timers
-    rocketTimer++;
-    alienStepTimer++;
-    alienMaterializationTimer++;
   }
+
+  Keyboard::State keyState = Keyboard::scan();
+
+  while (! (keyState.keyDown(Keyboard::Key::Home) || keyState.keyDown(Keyboard::Key::Power) || keyState.keyDown(Keyboard::Key::Back))) {
+    keyState = Keyboard::scan();
+
+    bool nextGrid[Screen::Height][Screen::Width];
+
+    for (uint16_t y = 0; y < Screen::Height; y++)
+    {
+      for (uint16_t x = 0; x < Screen::Width; x++)
+      {
+        uint8_t neighbors = countNeighbors(x, y);
+        bool nextState = grid[y][x] ? (neighbors == 2 || neighbors == 3) : (neighbors == 3);
+
+        nextGrid[y][x] = nextState;
+
+        Display::pushRectUniform(Rect(x, y, 1, 1), nextState ? Black : White);
+      }
+    }
+
+    for (uint16_t i = 0; i < Screen::Height; i++)
+    {
+      for (uint16_t j = 0; j < Screen::Width; j++)
+      {
+        grid[i][j] = nextGrid[i][j];
+      }
+    }
+
+  }
+
+  do {
+     keyState = Keyboard::scan();
+  } while (keyState.keyDown(Keyboard::Key::Home) || keyState.keyDown(Keyboard::Key::Power) || keyState.keyDown(Keyboard::Key::Back));
+
+  return 0;
 }
